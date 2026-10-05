@@ -80,7 +80,16 @@
     .muted{color:var(--muted)}
     .loading-line{font-size:12px;color:var(--muted);margin-top:8px}
 
-    .audit-toolbar{display:grid;grid-template-columns:minmax(240px,2fr) 180px 220px auto;gap:10px;margin-bottom:14px}
+    .audit-toolbar{display:grid;grid-template-columns:minmax(220px,2fr) 155px 155px 180px 190px auto;gap:10px;margin-bottom:14px}
+    .audit-tools{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+    .audit-management{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:16px}
+    .management-list{display:grid;gap:8px}
+    .management-row{display:grid;grid-template-columns:minmax(120px,1fr) 90px 90px;gap:10px;align-items:center;padding:9px 0;border-bottom:1px solid #edf1f5;font-size:12px}
+    .management-row:last-child{border-bottom:0}
+    .risk-high{color:#b42318;font-weight:900}
+    .risk-mid{color:#9a6700;font-weight:900}
+    .risk-ok{color:#198754;font-weight:900}
+    .audit-note{font-size:12px;color:var(--muted);margin-top:8px}
     .audit-toolbar input,.audit-toolbar select{width:100%;border:1px solid #cfd8e3;border-radius:10px;padding:10px 11px;background:#fff;font:inherit}
     .audit-badge{display:inline-flex;align-items:center;padding:5px 9px;border-radius:999px;font-size:11px;font-weight:900;white-space:nowrap}
     .audit-normal{background:#e9f7ef;color:#198754}
@@ -122,6 +131,10 @@
       .grid2{grid-template-columns:1fr}
       .form{grid-template-columns:1fr 1fr}
       .detail-grid{grid-template-columns:repeat(2,1fr)}
+    }
+    @media(max-width:1100px){
+      .audit-toolbar{grid-template-columns:1fr 1fr 1fr}
+      .audit-management{grid-template-columns:1fr}
     }
     @media(max-width:900px){
       .audit-toolbar{grid-template-columns:1fr 1fr}
@@ -215,7 +228,11 @@
         <section id="pageAudit" class="page">
           <div class="page-head">
             <div><h2>Auditoria de entregas</h2><p>Consulte onde e quando cada entrega foi baixada.</p></div>
-            <button class="btn btn-primary" onclick="refreshAudit()">Atualizar auditoria</button>
+            <div class="audit-tools" style="margin:0">
+              <button class="btn btn-light" onclick="exportAuditCSV()">⬇️ Excel/CSV</button>
+              <button class="btn btn-light" onclick="printAuditReport()">🖨️ PDF</button>
+              <button class="btn btn-primary" onclick="refreshAudit()">Atualizar auditoria</button>
+            </div>
           </div>
 
           <div class="kpis audit-summary">
@@ -228,8 +245,12 @@
 
           <div class="card">
             <div class="audit-toolbar">
-              <input id="auditSearch" placeholder="Pesquisar pacote, destinatário, entregador ou rota" oninput="renderAuditFiltered()">
-              <input id="auditDate" type="date" onchange="renderAuditFiltered()">
+              <input id="auditSearch" placeholder="Pacote, destinatário, rota..." oninput="renderAuditFiltered()">
+              <input id="auditDateFrom" type="date" title="Data inicial" onchange="renderAuditFiltered()">
+              <input id="auditDateTo" type="date" title="Data final" onchange="renderAuditFiltered()">
+              <select id="auditDriver" onchange="renderAuditFiltered()">
+                <option value="">Todos os entregadores</option>
+              </select>
               <select id="auditClass" onchange="renderAuditFiltered()">
                 <option value="">Todas as classificações</option>
                 <option value="NORMAL">Normal</option>
@@ -238,6 +259,21 @@
                 <option value="SEM_REFERENCIA">Sem referência</option>
               </select>
               <button class="btn btn-light" onclick="clearAuditFilters()">Limpar filtros</button>
+            </div>
+
+            <div class="audit-management">
+              <div class="card" style="padding:14px">
+                <h3>Performance por entregador</h3>
+                <div id="auditDriverRanking" class="management-list">
+                  <div class="muted">Atualize a auditoria para gerar os indicadores.</div>
+                </div>
+              </div>
+              <div class="card" style="padding:14px">
+                <h3>Qualidade das baixas</h3>
+                <div id="auditQualitySummary" class="management-list">
+                  <div class="muted">Atualize a auditoria para gerar os indicadores.</div>
+                </div>
+              </div>
             </div>
 
             <div class="table-wrap">
@@ -342,7 +378,7 @@ function routeCard(x){return`<div class="route-card"><div class="route-head"><di
 function toggleRoute(id){document.getElementById('route_'+id)?.classList.toggle('hidden')}
 
 // AUDITORIA
-function refreshAudit(){if(!token)return;const tb=document.getElementById('auditTable');if(tb)tb.innerHTML='<tr><td colspan="10">Carregando auditoria...</td></tr>';gs('getDeliveryAuditMobile',[token,500],r=>{auditData=r||{items:[],totals:{}};renderAuditSummary();renderAuditFiltered()},e=>{if(tb)tb.innerHTML='<tr><td colspan="10" class="err">'+esc(e.message||e)+'</td></tr>';authFail(e)})}
+function refreshAudit(){if(!token)return;const tb=document.getElementById('auditTable');if(tb)tb.innerHTML='<tr><td colspan="10">Carregando auditoria...</td></tr>';gs('getDeliveryAuditMobile',[token,500],r=>{auditData=r||{items:[],totals:{}};populateAuditDrivers();renderAuditSummary();renderAuditFiltered()},e=>{if(tb)tb.innerHTML='<tr><td colspan="10" class="err">'+esc(e.message||e)+'</td></tr>';authFail(e)})}
 function renderAuditSummary(){const t=auditData.totals||{};q('aTotal',t.total||0);q('aGps',t.comGps||0);q('aNoGps',t.semGps||0);q('aAttention',t.atencao||0);q('aDivergent',t.divergente||0)}
 function auditClassBadge(c){if(c==='NORMAL')return'<span class="audit-badge audit-normal">✅ Normal</span>';if(c==='ATENCAO')return'<span class="audit-badge audit-attention">⚠️ Atenção</span>';if(c==='DIVERGENTE')return'<span class="audit-badge audit-divergent">🔴 Divergente</span>';return'<span class="audit-badge audit-none">⚪ Sem referência</span>'}
 function auditDistanceText(x){if(x.distanceFromPlannedM===null||x.distanceFromPlannedM===undefined)return'-';const m=Number(x.distanceFromPlannedM);return m>=1000?(m/1000).toFixed(2).replace('.',',')+' km':Math.round(m)+' m'}
@@ -353,13 +389,18 @@ function renderAuditFiltered(){
   if(!tb)return;
 
   const search=String(document.getElementById('auditSearch')?.value||'').trim().toLowerCase();
-  const date=document.getElementById('auditDate')?.value||'';
+  const dateFrom=document.getElementById('auditDateFrom')?.value||'';
+  const dateTo=document.getElementById('auditDateTo')?.value||'';
+  const driver=document.getElementById('auditDriver')?.value||'';
   const cls=document.getElementById('auditClass')?.value||'';
 
   const items=(auditData.items||[]).filter(x=>{
     const hay=[x.id,x.recipient,x.driver,x.user,x.routeId,x.address].join(' ').toLowerCase();
     if(search&&hay.indexOf(search)<0)return false;
-    if(date&&auditDateIso(x.dateTime)!==date)return false;
+    const iso=auditDateIso(x.dateTime);
+    if(dateFrom&&iso&&iso<dateFrom)return false;
+    if(dateTo&&iso&&iso>dateTo)return false;
+    if(driver&&String(x.driver||x.user||'')!==driver)return false;
     if(cls&&x.classification!==cls)return false;
     return true;
   });
@@ -392,9 +433,104 @@ function renderAuditFiltered(){
   }).join('')||'<tr><td colspan="10">Nenhuma entrega encontrada para os filtros selecionados.</td></tr>';
 
   window.__auditFilteredItems=items;
+  renderAuditManagement(items);
 }
 
-function clearAuditFilters(){const s=document.getElementById('auditSearch'),d=document.getElementById('auditDate'),c=document.getElementById('auditClass');if(s)s.value='';if(d)d.value='';if(c)c.value='';renderAuditFiltered()}
+function populateAuditDrivers(){
+  const sel=document.getElementById('auditDriver');
+  if(!sel)return;
+  const current=sel.value;
+  const drivers=[...new Set((auditData.items||[]).map(x=>String(x.driver||x.user||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'pt-BR'));
+  sel.innerHTML='<option value="">Todos os entregadores</option>'+drivers.map(d=>'<option value="'+esc(d)+'">'+esc(d)+'</option>').join('');
+  if(drivers.includes(current))sel.value=current;
+}
+
+function clearAuditFilters(){
+  ['auditSearch','auditDateFrom','auditDateTo'].forEach(id=>{const el=document.getElementById(id);if(el)el.value=''});
+  ['auditDriver','auditClass'].forEach(id=>{const el=document.getElementById(id);if(el)el.value=''});
+  renderAuditFiltered();
+}
+
+function renderAuditManagement(items){
+  const ranking=document.getElementById('auditDriverRanking');
+  const quality=document.getElementById('auditQualitySummary');
+  if(!ranking||!quality)return;
+
+  const byDriver={};
+  items.forEach(x=>{
+    const d=String(x.driver||x.user||'Sem entregador');
+    if(!byDriver[d])byDriver[d]={total:0,div:0,att:0,normal:0,noGps:0};
+    const z=byDriver[d]; z.total++;
+    if(x.classification==='DIVERGENTE')z.div++;
+    if(x.classification==='ATENCAO')z.att++;
+    if(x.classification==='NORMAL')z.normal++;
+    if(x.gpsLat===null||x.gpsLng===null||x.gpsLat===undefined||x.gpsLng===undefined)z.noGps++;
+  });
+
+  const rows=Object.entries(byDriver).map(([name,z])=>{
+    const risk=z.total?((z.div+z.att)/z.total)*100:0;
+    return {name,...z,risk};
+  }).sort((a,b)=>b.risk-a.risk||b.total-a.total);
+
+  ranking.innerHTML=rows.map(r=>{
+    const cls=r.risk>=20?'risk-high':r.risk>=8?'risk-mid':'risk-ok';
+    return '<div class="management-row"><div><b>'+esc(r.name)+'</b><br><span class="muted">'+r.total+' entregas</span></div><div class="'+cls+'">'+r.risk.toFixed(1).replace('.',',')+'% risco</div><div>'+r.div+' diverg.</div></div>';
+  }).join('')||'<div class="muted">Sem dados para os filtros selecionados.</div>';
+
+  const total=items.length;
+  const withGps=items.filter(x=>x.gpsLat!==null&&x.gpsLng!==null&&x.gpsLat!==undefined&&x.gpsLng!==undefined).length;
+  const noGps=total-withGps;
+  const divergent=items.filter(x=>x.classification==='DIVERGENTE').length;
+  const attention=items.filter(x=>x.classification==='ATENCAO').length;
+  const normal=items.filter(x=>x.classification==='NORMAL').length;
+  const distances=items.map(x=>Number(x.distanceFromPlannedM)).filter(Number.isFinite);
+  const avg=distances.length?distances.reduce((a,b)=>a+b,0)/distances.length:0;
+
+  quality.innerHTML=[
+    ['Cobertura GPS', total?((withGps/total)*100).toFixed(1).replace('.',',')+'%':'0%'],
+    ['Baixas normais', normal],
+    ['Em atenção', attention],
+    ['Divergentes', divergent],
+    ['Sem GPS', noGps],
+    ['Distância média', Math.round(avg)+' m']
+  ].map(x=>'<div class="management-row"><div><b>'+x[0]+'</b></div><div></div><div><b>'+x[1]+'</b></div></div>').join('');
+}
+
+function csvCell(v){
+  const s=String(v??'').replace(/"/g,'""');
+  return '"'+s+'"';
+}
+
+function exportAuditCSV(){
+  const items=window.__auditFilteredItems||[];
+  if(!items.length){alert('Não há entregas para exportar com os filtros atuais.');return}
+  const header=['Data/Hora','Pacote','Destinatário','Endereço','Entregador','Rota','Sequência','Latitude baixa','Longitude baixa','Precisão GPS (m)','Latitude prevista','Longitude prevista','Distância do previsto (m)','Classificação'];
+  const rows=items.map(x=>[
+    x.dateTime,x.id,x.recipient,x.address,x.driver||x.user,x.routeId,x.sequence,
+    x.gpsLat,x.gpsLng,x.gpsAccuracy,x.plannedLat,x.plannedLng,x.distanceFromPlannedM,auditClassificationText(x.classification)
+  ]);
+  const csv='\ufeff'+[header,...rows].map(r=>r.map(csvCell).join(';')).join('\r\n');
+  const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;
+  a.download='auditoria_entregas_'+new Date().toISOString().slice(0,10)+'.csv';
+  document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(url);
+}
+
+function printAuditReport(){
+  const items=window.__auditFilteredItems||[];
+  if(!items.length){alert('Não há entregas para gerar relatório.');return}
+  const total=items.length;
+  const divergent=items.filter(x=>x.classification==='DIVERGENTE').length;
+  const attention=items.filter(x=>x.classification==='ATENCAO').length;
+  const noGps=items.filter(x=>x.gpsLat===null||x.gpsLng===null||x.gpsLat===undefined||x.gpsLng===undefined).length;
+  const w=window.open('','_blank');
+  if(!w){alert('O navegador bloqueou a abertura do relatório.');return}
+  const rows=items.map(x=>'<tr><td>'+esc(x.dateTime||'-')+'</td><td>'+esc(x.id||'-')+'</td><td>'+esc(x.recipient||'-')+'</td><td>'+esc(x.driver||x.user||'-')+'</td><td>'+esc(auditDistanceText(x))+'</td><td>'+esc(auditClassificationText(x.classification))+'</td></tr>').join('');
+  w.document.write('<!doctype html><html><head><meta charset="utf-8"><title>Relatório de Auditoria</title><style>body{font-family:Arial,sans-serif;color:#17223b;padding:28px}h1{margin-bottom:4px}.muted{color:#667085}.k{display:flex;gap:12px;margin:20px 0}.box{border:1px solid #ddd;border-radius:8px;padding:10px 14px}table{width:100%;border-collapse:collapse;font-size:11px}th,td{border:1px solid #ddd;padding:7px;text-align:left}th{background:#f3f6f9}@media print{button{display:none}}</style></head><body><h1>Coutinho Logística</h1><div class="muted">Relatório de Auditoria de Entregas · '+new Date().toLocaleString('pt-BR')+'</div><div class="k"><div class="box"><b>'+total+'</b><br>Entregas</div><div class="box"><b>'+divergent+'</b><br>Divergentes</div><div class="box"><b>'+attention+'</b><br>Atenção</div><div class="box"><b>'+noGps+'</b><br>Sem GPS</div></div><table><thead><tr><th>Data/Hora</th><th>Pacote</th><th>Destinatário</th><th>Entregador</th><th>Distância</th><th>Classificação</th></tr></thead><tbody>'+rows+'</tbody></table><script>window.onload=()=>window.print()<\/script></body></html>');
+  w.document.close();
+}
 
 function openAuditDetailByIndex(index){
   const items=window.__auditFilteredItems||auditData.items||[];
