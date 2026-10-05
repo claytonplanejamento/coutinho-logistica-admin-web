@@ -112,6 +112,8 @@
     .legend-delivery{background:#c0392b}
     .photo-box{margin-top:14px;border:1px solid var(--line);border-radius:12px;padding:12px;background:#fbfcfe}
     .photo-box img{display:block;max-width:100%;max-height:420px;margin:10px auto 0;border-radius:10px}
+    #auditPhotoContent{min-height:0}
+    #auditPhotoStatus.err{color:#b42318}
 
     @media(max-width:1050px){
       .layout{grid-template-columns:1fr}
@@ -409,7 +411,7 @@ function openAuditDetailByIndex(index){
   const buttons=[];
   if(x.deliveryMapUrl)buttons.push('<a class="btn btn-primary" target="_blank" rel="noopener" href="'+esc(x.deliveryMapUrl)+'">📍 Abrir local da baixa</a>');
   if(x.plannedMapUrl)buttons.push('<a class="btn btn-light" target="_blank" rel="noopener" href="'+esc(x.plannedMapUrl)+'">🎯 Abrir destino previsto</a>');
-  if(x.photoUrl)buttons.push('<a class="btn btn-light" target="_blank" rel="noopener" href="'+esc(x.photoUrl)+'">📷 Abrir foto</a>');
+  if(x.hasPhoto||x.photoUrl)buttons.push('<button id="auditPhotoBtn" class="btn btn-light" onclick="loadAuditPhoto(\''+attr(x.id)+'\')">📷 Ver foto</button>');
 
   const body=`
     <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-top:4px">
@@ -444,12 +446,94 @@ function openAuditDetailByIndex(index){
 
     <div id="auditCompareMap"></div>
 
-    ${x.photoUrl?'<div class="photo-box"><b>Foto vinculada à entrega</b><div class="muted" style="margin-top:4px">Se a imagem não abrir dentro do painel, use o botão “Abrir foto”.</div><img src="'+esc(x.photoUrl)+'" alt="Foto da entrega" onerror="this.style.display=\'none\'"></div>':''}
+    ${(x.hasPhoto||x.photoUrl)?'<div id="auditPhotoBox" class="photo-box"><b>Foto vinculada à entrega</b><div id="auditPhotoStatus" class="muted" style="margin-top:6px">Clique em “📷 Ver foto” para carregar a imagem com acesso autenticado.</div><div id="auditPhotoContent"></div></div>':''}
   `;
 
   modal('Detalhe da entrega · '+(x.id||''),body);
 
   setTimeout(()=>renderAuditCompareMap(x),120);
+}
+
+
+function loadAuditPhoto(packageId){
+  if(!packageId||!token)return;
+
+  const btn=document.getElementById('auditPhotoBtn');
+  const status=document.getElementById('auditPhotoStatus');
+  const content=document.getElementById('auditPhotoContent');
+
+  if(btn){
+    btn.disabled=true;
+    btn.textContent='Carregando foto...';
+  }
+
+  if(status){
+    status.textContent='Buscando imagem protegida no Google Drive...';
+  }
+
+  if(content){
+    content.innerHTML='';
+  }
+
+  gs(
+    'obterFotoEntregaMobile',
+    [packageId,token],
+    r=>{
+      if(btn){
+        btn.disabled=false;
+        btn.textContent='📷 Atualizar foto';
+      }
+
+      if(!r||!r.dataUrl){
+        if(status){
+          status.textContent='Foto não disponível para esta entrega.';
+        }
+        return;
+      }
+
+      if(status){
+        status.textContent=(r.fileName?'Arquivo: '+r.fileName+' · ':'')+'Imagem carregada com acesso ADMIN.';
+      }
+
+      if(content){
+        content.innerHTML=
+          '<img id="auditDeliveryPhoto" src="'+r.dataUrl+'" alt="Foto da entrega">'+
+          '<div class="detail-actions" style="margin-top:10px">'+
+          '<button class="btn btn-primary" onclick="openAuditPhotoFullscreen()">🔍 Ampliar foto</button>'+
+          '</div>';
+      }
+    },
+    e=>{
+      if(btn){
+        btn.disabled=false;
+        btn.textContent='📷 Tentar novamente';
+      }
+
+      if(status){
+        status.textContent='Não foi possível carregar a foto: '+(e.message||e);
+        status.classList.add('err');
+      }
+    }
+  );
+}
+
+function openAuditPhotoFullscreen(){
+  const img=document.getElementById('auditDeliveryPhoto');
+  if(!img||!img.src)return;
+
+  const w=window.open('','_blank');
+
+  if(!w){
+    alert('O navegador bloqueou a abertura da imagem.');
+    return;
+  }
+
+  w.document.write(
+    '<!doctype html><html><head><meta charset="utf-8"><title>Foto da entrega</title>'+
+    '<style>html,body{margin:0;background:#111;height:100%;display:grid;place-items:center}img{max-width:100%;max-height:100vh;object-fit:contain}</style>'+
+    '</head><body><img src="'+img.src+'" alt="Foto da entrega"></body></html>'
+  );
+  w.document.close();
 }
 
 function detailBox(label,value){
