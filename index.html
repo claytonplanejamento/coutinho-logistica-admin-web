@@ -349,6 +349,7 @@
           integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 
 <script>
+// V6.11.1 - Correcao do botao Detalhes em Rotas abertas
 let token='',userName='',role='',central=null,security=null,auditData={items:[],totals:{}},timer=null,webHeartbeatTimer=null;
 let auditCompareMap=null;
 
@@ -374,8 +375,44 @@ function authFail(e){if(String(e&&e.message||e).toLowerCase().includes('sess'))l
 function statusBadge(s){const c=s==='ONLINE'?'online':s==='INATIVO'?'inactive':'offline';return`<span class="status ${c}">${esc(s||'OFFLINE')}</span>`}
 
 function renderCentral(r){const t=r.totals||{};q('kOnline',t.online||0);q('kRoutes',t.openRoutes||0);q('kPending',t.pending||0);q('kDone',t.completed||0);document.getElementById('dashUsers').innerHTML=(r.users||[]).map(u=>`<tr><td><b>${esc(u.name||u.user)}</b><br><span class="muted">${esc(u.user)}</span></td><td>${esc(u.role)}</td><td>${statusBadge(u.status)}</td><td>${esc(u.lastSignal||'-')}</td><td>${esc(u.routeId||'-')}</td></tr>`).join('')||'<tr><td colspan="5">Nenhum usuário.</td></tr>';const cards=(r.routes||[]).map(routeCard).join('')||'<div class="muted">Nenhuma rota aberta.</div>';document.getElementById('dashRoutes').innerHTML=cards;document.getElementById('routesList').innerHTML=cards}
-function routeCard(x){return`<div class="route-card"><div class="route-head"><div><div class="route-title">${esc(x.user||'-')} · ${esc(x.routeId||'')}</div><div class="route-meta">${x.completed||0}/${x.total||0} concluídas · ${x.pending||0} pendentes<br>Planejada: ${num(x.plannedKm)} km · GPS: ${num(x.actualKm)} km · Última atualização: ${esc(x.lastUpdate||'-')}</div></div><button class="btn btn-light" onclick="toggleRoute('${attr(x.routeId)}')">Detalhes</button></div><div id="route_${attr(x.routeId)}" class="route-items hidden">${(x.items||[]).map(i=>`<div class="stop"><b>${i.sequence||'-'}</b><div><b>${esc(i.recipient||'Destinatário')}</b><br><span class="muted">${esc([i.street,i.number,i.bairro].filter(Boolean).join(', '))}</span></div><div>${esc(i.status||'Pendente')}</div></div>`).join('')}</div></div>`}
-function toggleRoute(id){document.getElementById('route_'+id)?.classList.toggle('hidden')}
+function routeCard(x){
+  return `<div class="route-card">
+    <div class="route-head">
+      <div>
+        <div class="route-title">${esc(x.user||'-')} · ${esc(x.routeId||'')}</div>
+        <div class="route-meta">
+          ${x.completed||0}/${x.total||0} concluídas · ${x.pending||0} pendentes<br>
+          Planejada: ${num(x.plannedKm)} km · GPS: ${num(x.actualKm)} km · Última atualização: ${esc(x.lastUpdate||'-')}
+        </div>
+      </div>
+      <button class="btn btn-light" onclick="toggleRoute(this)">Detalhes</button>
+    </div>
+    <div class="route-items hidden">
+      ${(x.items||[]).length
+        ? (x.items||[]).map(i=>`<div class="stop">
+            <b>${i.sequence||'-'}</b>
+            <div>
+              <b>${esc(i.recipient||'Destinatário')}</b><br>
+              <span class="muted">${esc([i.street,i.number,i.bairro].filter(Boolean).join(', '))}</span>
+            </div>
+            <div>${esc(i.status||'Pendente')}</div>
+          </div>`).join('')
+        : '<div class="muted">Nenhuma parada detalhada disponível para esta rota.</div>'
+      }
+    </div>
+  </div>`;
+}
+
+function toggleRoute(button){
+  const card=button.closest('.route-card');
+  if(!card)return;
+  const details=card.querySelector('.route-items');
+  if(!details)return;
+
+  const opening=details.classList.contains('hidden');
+  details.classList.toggle('hidden');
+  button.textContent=opening?'Ocultar':'Detalhes';
+}
 
 // AUDITORIA
 function refreshAudit(){if(!token)return;const tb=document.getElementById('auditTable');if(tb)tb.innerHTML='<tr><td colspan="10">Carregando auditoria...</td></tr>';gs('getDeliveryAuditMobile',[token,500],r=>{auditData=r||{items:[],totals:{}};populateAuditDrivers();renderAuditSummary();renderAuditFiltered()},e=>{if(tb)tb.innerHTML='<tr><td colspan="10" class="err">'+esc(e.message||e)+'</td></tr>';authFail(e)})}
