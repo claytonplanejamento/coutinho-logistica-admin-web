@@ -308,7 +308,7 @@
           <div class="card">
             <div class="table-wrap">
               <table class="table">
-                <thead><tr><th>Nome</th><th>Login</th><th>Perfil</th><th>Status</th><th>Último login</th><th>Ações</th></tr></thead>
+                <thead><tr><th>Nome</th><th>Login</th><th>Perfil</th><th>Conta</th><th>Conexão</th><th>Último sinal</th><th>Último login</th><th>Rota atual</th><th>Ações</th></tr></thead>
                 <tbody id="usersTable"></tbody>
               </table>
             </div>
@@ -349,7 +349,7 @@
           integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 
 <script>
-// V6.11.1 - Correcao do botao Detalhes em Rotas abertas
+// V6.12.1 - Usuarios: conta separada de conexao ONLINE/OFFLINE
 let token='',userName='',role='',central=null,security=null,auditData={items:[],totals:{}},timer=null,webHeartbeatTimer=null;
 let auditCompareMap=null;
 
@@ -775,7 +775,53 @@ function renderAuditCompareMap(x){
 }
 
 // SEGURANÇA
-function renderSecurity(r){const h=r.health||{};document.getElementById('healthKpis').innerHTML=[['OCR ativos',(h.inputRows||0)+' / '+(h.ocrCapacity||20000)],['Base entregas',h.baseRows||0],['Histórico',h.historyRows||0],['Endereços GPS',h.gpsAddresses||0],['Usuários',h.users||0],['Dispositivos',h.devices||0]].map(x=>`<div class="kpi"><div class="label">${x[0]}</div><div class="value">${x[1]}</div></div>`).join('');document.getElementById('usersTable').innerHTML=(r.users||[]).map(u=>`<tr><td><b>${esc(u.name||u.user)}</b></td><td>${esc(u.user)}</td><td>${esc(u.role)}</td><td>${u.active?'Ativo':'Desativado'}</td><td>${esc(u.lastLogin||'-')}</td><td><button class="btn ${u.active?'btn-danger':'btn-ok'}" onclick="toggleUser('${attr(u.id)}',${!u.active})">${u.active?'Desativar':'Ativar'}</button> <button class="btn btn-warn" onclick="resetPass('${attr(u.id)}','${attr(u.user)}')">Senha</button></td></tr>`).join('');document.getElementById('devicesTable').innerHTML=(r.devices||[]).map(d=>`<tr><td><b>${esc(d.description||'Dispositivo')}</b><br><span class="muted">${esc(d.id)}</span></td><td>${esc(d.user||'-')}</td><td>${esc(d.status||'-')}</td><td>${esc(d.requested||'-')}</td><td>${esc(d.lastAccess||'-')}</td><td>${d.status==='PENDENTE'?`<button class="btn btn-ok" onclick="approveDevice('${attr(d.id)}')">Aprovar</button> `:''}${d.status!=='REVOGADO'?`<button class="btn btn-danger" onclick="revokeDevice('${attr(d.id)}')">Revogar</button>`:''}</td></tr>`).join('')}
+function renderSecurity(r){
+  const h=r.health||{};
+
+  document.getElementById('healthKpis').innerHTML=[
+    ['OCR ativos',(h.inputRows||0)+' / '+(h.ocrCapacity||20000)],
+    ['Base entregas',h.baseRows||0],
+    ['Histórico',h.historyRows||0],
+    ['Endereços GPS',h.gpsAddresses||0],
+    ['Usuários',h.users||0],
+    ['Dispositivos',h.devices||0]
+  ].map(x=>`<div class="kpi"><div class="label">${x[0]}</div><div class="value">${x[1]}</div></div>`).join('');
+
+  document.getElementById('usersTable').innerHTML=(r.users||[]).map(u=>{
+    const conta=u.active
+      ? '<span class="status online">✅ ATIVA</span>'
+      : '<span class="status offline">⛔ DESATIVADA</span>';
+
+    const conexao=statusBadge(u.connectionStatus||u.status||'OFFLINE');
+
+    return `<tr>
+      <td><b>${esc(u.name||u.user)}</b></td>
+      <td>${esc(u.user)}</td>
+      <td>${esc(u.role)}</td>
+      <td>${conta}</td>
+      <td>${conexao}</td>
+      <td>${esc(u.lastSignal||'-')}</td>
+      <td>${esc(u.lastLogin||'-')}</td>
+      <td>${esc(u.routeId||'Sem rota')}</td>
+      <td>
+        <button class="btn ${u.active?'btn-danger':'btn-ok'}" onclick="toggleUser('${attr(u.id)}',${!u.active})">${u.active?'Desativar':'Ativar'}</button>
+        <button class="btn btn-warn" onclick="resetPass('${attr(u.id)}','${attr(u.user)}')">Senha</button>
+      </td>
+    </tr>`;
+  }).join('')||'<tr><td colspan="9">Nenhum usuário cadastrado.</td></tr>';
+
+  document.getElementById('devicesTable').innerHTML=(r.devices||[]).map(d=>`<tr>
+    <td><b>${esc(d.description||'Dispositivo')}</b><br><span class="muted">${esc(d.id)}</span></td>
+    <td>${esc(d.user||'-')}</td>
+    <td>${esc(d.status||'-')}</td>
+    <td>${esc(d.requested||'-')}</td>
+    <td>${esc(d.lastAccess||'-')}</td>
+    <td>
+      ${d.status==='PENDENTE'?`<button class="btn btn-ok" onclick="approveDevice('${attr(d.id)}')">Aprovar</button> `:''}
+      ${d.status!=='REVOGADO'?`<button class="btn btn-danger" onclick="revokeDevice('${attr(d.id)}')">Revogar</button>`:''}
+    </td>
+  </tr>`).join('');
+}
 
 function openNewUser(){modal('Novo usuário',`<div class="form"><input id="nName" placeholder="Nome"><input id="nUser" placeholder="Login"><input id="nPass" type="password" placeholder="Senha temporária"><select id="nRole"><option>ENTREGADOR</option><option>SUPERVISOR</option><option>ADMIN</option></select></div><div style="margin-top:14px"><button class="btn btn-primary" onclick="createUser()">Criar usuário</button></div>`)}
 function createUser(){gs('createUserMobile',[token,{name:v('nName'),user:v('nUser'),password:v('nPass'),role:v('nRole')}],()=>{closeModal();refreshSecurity()})}
